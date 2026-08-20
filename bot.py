@@ -1,6 +1,5 @@
 import os
 import discord
-from discord.ext import commands
 import google.generativeai as genai
 from keep_alive import keep_alive
 
@@ -18,36 +17,35 @@ system_prompt = (
     "Jika pengguna mengirimkan gambar produk, bantu analisis dan berikan ide kontennya."
 )
 
-# Menggunakan model Gemini 3.6 Flash
+# Menggunakan model Gemini 3.6 Flash terbaru
 model = genai.GenerativeModel(model_name="gemini-3.6-flash", system_instruction=system_prompt)
 
-# Pengaturan Bot Discord
+# Pengaturan Bot Discord murni
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+client = discord.Client(intents=intents)
 
-@bot.event
+@client.event
 async def on_ready():
-    print(f"Bot {bot.user} sudah bangun dan siap bekerja dengan Gemini 3.6!")
+    print(f"Bot {client.user} sudah bangun dan siap bekerja dengan Gemini 3.6!")
 
-@bot.event
+@client.event
 async def on_message(message):
     # Agar bot tidak merespons pesannya sendiri
-    if message.author == bot.user:
+    if message.author == client.user:
         return
 
     # Bot merespons jika:
     # 1. Diawali !buat
     # 2. Bot di-tag (@)
-    # 3. Bot di-reply
-    # 4. Dikirim di dalam server (bukan DM pribadi)
-    if message.content.startswith("!buat") or bot.user in message.mentions or (message.reference and message.reference.resolved and message.reference.resolved.author == bot.user):
+    # 3. Bot di-reply (balas chat)
+    if message.content.startswith("!buat") or client.user in message.mentions or (message.reference and message.reference.resolved and message.reference.resolved.author == client.user):
         
         async with message.channel.typing():
             try:
                 prompt_text = message.content.replace("!buat", "").strip()
                 if not prompt_text and not message.attachments:
-                    prompt_text = "Halo! Saya Asisten Creative Director kamu. Ada yang bisa dibantu untuk konten hari ini?"
+                    prompt_text = "Halo! Saya Asisten Creative Director kamu. Ada yang bisa dibantu untuk konten atau produk hari ini?"
 
                 contents = [prompt_text]
 
@@ -69,8 +67,6 @@ async def on_message(message):
             except Exception as e:
                 await message.reply(f"Ups, ada kendala teknis: {e}")
 
-    await bot.process_commands(message)
-
 # Jalankan server anti-tidur dan bot Discord
 keep_alive()
-bot.run(DISCORD_TOKEN)
+client.run(DISCORD_TOKEN)
