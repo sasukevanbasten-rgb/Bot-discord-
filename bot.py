@@ -87,7 +87,7 @@ Jika input tidak lengkap, minta pengguna melengkapinya. Jika durasi tidak realis
 """ 
 
 # Menyiapkan AI
-model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=system_prompt)
+model = genai.GenerativeModel(model_name="gemini-3.6-flash", system_instruction=system_prompt)
 
 # Menyiapkan Bot Discord
 intents = discord.Intents.default()
