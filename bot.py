@@ -1,5 +1,7 @@
 import os
 import asyncio
+import logging
+import traceback
 import discord
 
 from google import genai
@@ -31,6 +33,22 @@ if not GEMINI_API_KEY:
     raise RuntimeError(
         "GEMINI_API_KEY tidak ditemukan di Render Environment Variables."
     )
+
+
+# ============================================================
+# LOGGING
+# ============================================================
+
+# konfigurasi logging: tampilkan di console dan simpan ke file bot.log
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("bot.log", encoding="utf-8")
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -234,9 +252,7 @@ async def prepare_contents(message):
 
         except Exception as error:
 
-            print(
-                f"[IMAGE ERROR] {repr(error)}"
-            )
+            logger.exception("Error reading attachment: %s", error)
 
 
     return contents
@@ -248,50 +264,48 @@ async def prepare_contents(message):
 
 async def ask_gemini(contents):
 
-    response = await asyncio.to_thread(
-        gemini.models.generate_content,
-        model=MODEL_NAME,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT
+    try:
+        response = await asyncio.to_thread(
+            gemini.models.generate_content,
+            model=MODEL_NAME,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT
+            )
         )
-    )
+    except Exception as e:
+        logger.exception("[GEMINI CALL ERROR] %s", e)
+        # Log full traceback to file (already handled by logger.exception)
+        return "⚠️ Gemini gagal memproses permintaan (error koneksi / API)."
 
     # --------------------------------------------------------
     # RESPONSE TEXT
     # --------------------------------------------------------
 
-    text = getattr(
-        response,
-        "text",
-        None
-    )
-
-    if text:
-
-        return text.strip()
-
-
-    # --------------------------------------------------------
-    # FALLBACK
-    # --------------------------------------------------------
-
     try:
+        text = getattr(response, "text", None)
 
-        for candidate in response.candidates:
+        if text:
+            return text.strip()
 
-            if not candidate.content:
+        # --------------------------------------------------------
+        # FALLBACK
+        # --------------------------------------------------------
+
+        for candidate in getattr(response, "candidates", []) or []:
+
+            if not getattr(candidate, "content", None):
                 continue
 
-            for part in candidate.content.parts:
+            for part in getattr(candidate.content, "parts", []) or []:
 
-                if part.text:
+                if getattr(part, "text", None):
 
                     return part.text.strip()
 
-    except Exception:
-        pass
-
+    except Exception as e:
+        logger.exception("[GEMINI RESPONSE PARSE ERROR] %s", e)
+        return "⚠️ Gemini merespons tapi tidak bisa diproses (format tak terduga)."
 
     return (
         "Gemini menerima pesan, tetapi "
@@ -306,37 +320,20 @@ async def ask_gemini(contents):
 @discord_bot.event
 async def on_ready():
 
-    print("")
-    print("=" * 60)
-    print("          DISCORD GEMINI AI BOT")
-    print("=" * 60)
+    logger.info("%s", """
 
-    print(
-        f"Bot       : {discord_bot.user}"
-    )
+============================================================
+          DISCORD GEMINI AI BOT
+============================================================
 
-    print(
-        f"Bot ID    : {discord_bot.user.id}"
-    )
+""")
 
-    print(
-        f"Model     : {MODEL_NAME}"
-    )
-
-    print(
-        "Mode      : AUTO CHAT"
-    )
-
-    print(
-        "Image     : ENABLED"
-    )
-
-    print(
-        "Status    : ONLINE"
-    )
-
-    print("=" * 60)
-    print("")
+    logger.info("Bot       : %s", discord_bot.user)
+    logger.info("Bot ID    : %s", discord_bot.user.id)
+    logger.info("Model     : %s", MODEL_NAME)
+    logger.info("Mode      : AUTO CHAT")
+    logger.info("Image     : ENABLED")
+    logger.info("Status    : ONLINE")
 
 
 # ============================================================
@@ -378,84 +375,82 @@ async def on_message(message):
             # SIAPKAN INPUT
             # ------------------------------------------------
 
-            contents = await prepare_contents(
-                message
-            )
-
-            if not contents:
-
+            try:
+                contents = await prepare_contents(message)
+                logger.info("prepare_contents succeeded, %d parts", len(contents))
+            except Exception as e:
+                logger.exception("prepare_contents failed: %s", e)
+                await message.reply(
+                    "⚠️ Terjadi kesalahan saat memproses lampiran/pesan.",
+                    mention_author=False
+                )
                 return
 
+            if not contents:
+                logger.info("No contents to process (empty after prepare_contents)")
+                return
 
             # ------------------------------------------------
             # GEMINI
             # ------------------------------------------------
 
-            answer = await ask_gemini(
-                contents
-            )
+            try:
+                answer = await ask_gemini(contents)
+                if isinstance(answer, str):
+                    logger.info("ask_gemini returned %d chars", len(answer))
+                else:
+                    logger.info("ask_gemini returned non-str response: %s", type(answer))
+            except Exception as e:
+                logger.exception("ask_gemini call failed: %s", e)
+                await message.reply(
+                    "⚠️ Gemini gagal memproses permintaan (error API/koneksi).",
+                    mention_author=False
+                )
+                return
 
 
             # ------------------------------------------------
             # DISCORD
             # ------------------------------------------------
 
-            messages = split_message(
-                answer
-            )
+            try:
+                messages = split_message(answer)
 
-            for index, text in enumerate(
-                messages
-            ):
+                for index, text in enumerate(messages):
 
-                if index == 0:
+                    if index == 0:
 
-                    await message.reply(
-                        text,
-                        mention_author=False
-                    )
+                        await message.reply(
+                            text,
+                            mention_author=False
+                        )
 
-                else:
+                    else:
 
-                    await message.channel.send(
-                        text
-                    )
+                        await message.channel.send(
+                            text
+                        )
 
+                logger.info("Sent reply messages (%d parts)", len(messages))
 
-        except Exception as error:
+            except Exception as e:
+                logger.exception("Failed to send reply messages: %s", e)
+                try:
+                    await message.channel.send("⚠️ Gagal mengirim balasan ke channel.")
+                except Exception:
+                    logger.exception("Also failed to send fallback message to channel")
 
-            # =================================================
-            # ERROR DETAIL
-            # =================================================
+        except Exception:
 
-            print("")
-            print("=" * 70)
-            print("                  GEMINI ERROR")
-            print("=" * 70)
+            logger.exception("Unexpected error in on_message")
 
-            print(
-                "TYPE :",
-                type(error).__name__
-            )
-
-            print(
-                "ERROR:",
-                str(error)
-            )
-
-            print("=" * 70)
-            print("")
-
-
-            # ------------------------------------------------
-            # Pesan user
-            # ------------------------------------------------
-
-            await message.reply(
-                "⚠️ Gemini sedang mengalami kendala. "
-                "Coba kirim pesan lagi.",
-                mention_author=False
-            )
+            try:
+                await message.reply(
+                    "⚠️ Gemini sedang mengalami kendala. Coba kirim pesan lagi.",
+                    mention_author=False
+                )
+            except Exception:
+                logger.exception("Failed to send final fallback reply")
 
 
 # ============================================================
@@ -469,9 +464,7 @@ keep_alive()
 # START BOT
 # ============================================================
 
-print(
-    "Memulai Discord Gemini AI Bot..."
-)
+logger.info("Memulai Discord Gemini AI Bot...")
 
 discord_bot.run(
     DISCORD_TOKEN
