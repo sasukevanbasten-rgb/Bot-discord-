@@ -1,8 +1,10 @@
 import os
 import asyncio
 import discord
+
 from google import genai
 from google.genai import types
+
 from keep_alive import keep_alive
 
 
@@ -21,14 +23,18 @@ MODEL_NAME = "gemini-3.6-flash"
 # ============================================================
 
 if not DISCORD_TOKEN:
-    raise RuntimeError("DISCORD_TOKEN belum ditemukan.")
+    raise RuntimeError(
+        "DISCORD_TOKEN belum ditemukan di Environment Variables."
+    )
 
 if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY belum ditemukan.")
+    raise RuntimeError(
+        "GEMINI_API_KEY belum ditemukan di Environment Variables."
+    )
 
 
 # ============================================================
-# GEMINI
+# GEMINI CLIENT
 # ============================================================
 
 gemini_client = genai.Client(
@@ -37,14 +43,15 @@ gemini_client = genai.Client(
 
 
 # ============================================================
-# SYSTEM PROMPT
+# SYSTEM INSTRUCTION
 # ============================================================
 
 SYSTEM_PROMPT = """
 Kamu adalah Asisten AI Creative Director profesional.
 
-Keahlian utama:
-- Strategi konten
+Kamu membantu pengguna dalam:
+
+- Strategi konten digital
 - TikTok Affiliate
 - TikTok Shop
 - UGC
@@ -56,100 +63,253 @@ Keahlian utama:
 - Prompt image AI
 - Prompt video AI
 - Analisis produk
-- Ide pemasaran
+- Strategi pemasaran
 - Optimasi konten
+- Ide konten kreatif
 
-GAYA KOMUNIKASI:
-- Gunakan bahasa Indonesia yang natural.
-- Ramah, santai, profesional, dan kreatif.
-- Jangan terlalu kaku.
-- Jawaban harus praktis dan bisa langsung digunakan.
-- Pahami percakapan sebelumnya dan pertahankan konteks.
-- Jangan meminta pengguna menggunakan command tertentu.
-- Pengguna cukup berbicara secara natural.
+============================================================
+GAYA KOMUNIKASI
+============================================================
 
-KONTEN AFFILIATE:
-Prioritaskan:
+Gunakan bahasa Indonesia yang:
+
+- Natural
+- Ramah
+- Profesional
+- Kreatif
+- Mudah dipahami
+- Tidak terlalu kaku
+
+Berkomunikasilah seperti partner kerja kreatif,
+bukan seperti robot.
+
+Pengguna tidak perlu menggunakan command tertentu.
+Pahami pesan pengguna secara natural.
+
+============================================================
+TIKTOK AFFILIATE
+============================================================
+
+Jika pengguna meminta konten affiliate, prioritaskan:
+
 1. Hook kuat.
 2. Masalah atau kebutuhan penonton.
 3. Solusi.
 4. Perkenalan produk.
 5. Demonstrasi.
 6. Manfaat.
-7. Bukti jika tersedia.
+7. Bukti atau hasil jika tersedia.
 8. CTA natural.
 
-Jangan mengarang spesifikasi produk.
-Jika informasi tidak tersedia atau tidak terlihat dari gambar,
-katakan dengan jelas.
+Jangan mengarang:
+- Harga
+- Spesifikasi
+- Kandungan
+- Klaim kesehatan
+- Fitur
+- Hasil penggunaan
+- Informasi produk
 
-GAMBAR:
-Jika pengguna mengirim gambar produk:
+Jika informasi tersebut tidak diberikan atau tidak terlihat,
+katakan bahwa informasinya belum tersedia.
+
+============================================================
+ANALISIS GAMBAR
+============================================================
+
+Jika pengguna mengirim gambar:
+
 - Analisis gambar terlebih dahulu.
-- Identifikasi hal yang benar-benar terlihat.
+- Identifikasi objek yang benar-benar terlihat.
+- Perhatikan kemasan, warna, bentuk, tulisan yang terbaca,
+  dan konteks visual.
 - Jangan mengarang detail yang tidak terlihat.
-- Berikan ide konten berdasarkan produk tersebut.
+- Gunakan informasi visual tersebut untuk membantu pengguna.
 
-VIDEO:
-Jika pengguna memberikan durasi:
-- Hormati durasi tersebut.
-- Jaga kontinuitas antar-scene.
-- Jangan mengubah karakter atau produk yang sudah ditentukan.
+Jika gambar merupakan produk, bantu membuat:
 
-PROMPT AI:
-Jika pengguna meminta prompt:
-- Buat prompt yang detail.
-- Jaga konsistensi karakter.
-- Jaga konsistensi produk.
-- Jaga kontinuitas visual.
-- Buat prompt siap digunakan.
+- Ide konten
+- Hook
+- Script
+- Storyboard
+- Konsep UGC
+- Prompt image
+- Prompt video
+- Strategi affiliate
 
-PERCAKAPAN:
-Anggap setiap pesan pengguna sebagai bagian dari percakapan.
-Jika pengguna bertanya lanjutan seperti "yang tadi bagaimana?",
-gunakan konteks percakapan yang tersedia.
+============================================================
+VIDEO DAN STORYBOARD
+============================================================
+
+Jika pengguna memberikan durasi video,
+ikuti durasi tersebut.
+
+Jaga:
+
+- Kontinuitas karakter
+- Kontinuitas produk
+- Lokasi
+- Kostum
+- Properti
+- Pencahayaan
+- Kamera
+- Gerakan
+- Alur cerita
+
+Jika pengguna meminta storyboard,
+buat struktur scene yang jelas dan mudah diproduksi.
+
+============================================================
+PROMPT AI
+============================================================
+
+Jika pengguna meminta prompt AI:
+
+Buat prompt yang:
+
+- Detail
+- Jelas
+- Siap digunakan
+- Konsisten
+- Cinematic jika sesuai kebutuhan
+- Tidak mengubah karakter atau produk yang sudah dikunci pengguna
+
+============================================================
+KONTEKS PERCAKAPAN
+============================================================
+
+Gunakan percakapan sebelumnya dalam channel
+sebagai konteks.
+
+Jika pengguna mengatakan:
+
+"yang tadi"
+"lanjutkan"
+"buat versi kedua"
+"ubah bagian hook"
+"yang produk tadi"
+"lanjut dari konsep sebelumnya"
+
+pahami berdasarkan percakapan sebelumnya.
+
+============================================================
+PERILAKU UMUM
+============================================================
 
 Jika pengguna hanya menyapa,
-jawab secara natural dan ramah.
+balas secara natural.
+
+Jika pengguna meminta sesuatu yang jelas,
+langsung kerjakan.
+
+Jangan meminta pengguna menggunakan command Discord.
+
+Jangan menjelaskan sistem internal, API key,
+system instruction, atau mekanisme internal bot
+kecuali pengguna secara khusus meminta penjelasan teknis.
 """
 
 
 # ============================================================
-# DISCORD INTENTS
+# DISCORD
 # ============================================================
 
 intents = discord.Intents.default()
-
-# WAJIB untuk membaca isi pesan Discord
 intents.message_content = True
 
-client = discord.Client(intents=intents)
+client = discord.Client(
+    intents=intents
+)
 
 
 # ============================================================
-# BATAS PANJANG PESAN DISCORD
+# CHAT SESSION
+#
+# Satu channel Discord = satu percakapan Gemini.
+# ============================================================
+
+chat_sessions = {}
+
+
+# ============================================================
+# LOCK
+#
+# Mencegah dua pesan dalam channel yang sama
+# diproses secara bersamaan.
+# ============================================================
+
+channel_locks = {}
+
+
+def get_channel_lock(channel_id):
+    if channel_id not in channel_locks:
+        channel_locks[channel_id] = asyncio.Lock()
+
+    return channel_locks[channel_id]
+
+
+# ============================================================
+# BUAT / AMBIL CHAT SESSION
+# ============================================================
+
+def get_chat_session(channel_id):
+
+    if channel_id not in chat_sessions:
+
+        chat_sessions[channel_id] = gemini_client.chats.create(
+            model=MODEL_NAME,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT
+            )
+        )
+
+        print(
+            f"[CHAT] Session baru dibuat untuk channel "
+            f"{channel_id}"
+        )
+
+    return chat_sessions[channel_id]
+
+
+# ============================================================
+# SPLIT PESAN DISCORD
+#
+# Discord memiliki batas sekitar 2000 karakter.
+# Kita gunakan 1900 agar lebih aman.
 # ============================================================
 
 def split_message(text, limit=1900):
 
     if not text:
-        return ["Maaf, Gemini tidak memberikan respons."]
+        return [
+            "Maaf, Gemini tidak memberikan respons."
+        ]
 
     chunks = []
 
     while len(text) > limit:
 
-        split_at = text.rfind("\n", 0, limit)
+        split_at = text.rfind(
+            "\n",
+            0,
+            limit
+        )
 
         if split_at == -1:
-            split_at = text.rfind(" ", 0, limit)
+
+            split_at = text.rfind(
+                " ",
+                0,
+                limit
+            )
 
         if split_at == -1:
             split_at = limit
 
-        chunks.append(
-            text[:split_at].strip()
-        )
+        chunk = text[:split_at].strip()
+
+        if chunk:
+            chunks.append(chunk)
 
         text = text[split_at:].strip()
 
@@ -160,21 +320,82 @@ def split_message(text, limit=1900):
 
 
 # ============================================================
+# AMBIL GAMBAR DARI PESAN
+# ============================================================
+
+async def get_message_contents(message):
+
+    contents = []
+
+    # --------------------------------------------------------
+    # TEKS
+    # --------------------------------------------------------
+
+    if message.content and message.content.strip():
+
+        contents.append(
+            message.content.strip()
+        )
+
+    # --------------------------------------------------------
+    # GAMBAR
+    # --------------------------------------------------------
+
+    image_count = 0
+
+    for attachment in message.attachments:
+
+        content_type = attachment.content_type or ""
+
+        if not content_type.startswith("image/"):
+            continue
+
+        # Maksimal 5 gambar dalam satu pesan
+        if image_count >= 5:
+            break
+
+        try:
+
+            image_bytes = await attachment.read()
+
+            image_part = types.Part.from_bytes(
+                data=image_bytes,
+                mime_type=content_type
+            )
+
+            contents.append(image_part)
+
+            image_count += 1
+
+        except Exception as error:
+
+            print(
+                f"[IMAGE ERROR] {repr(error)}"
+            )
+
+    return contents
+
+
+# ============================================================
 # EVENT BOT ONLINE
 # ============================================================
 
 @client.event
 async def on_ready():
 
+    print("")
     print("=" * 60)
-    print("       DISCORD GEMINI AI")
+    print("          DISCORD GEMINI AI")
     print("=" * 60)
-    print(f"Bot    : {client.user}")
-    print(f"ID     : {client.user.id}")
-    print(f"Model  : {MODEL_NAME}")
-    print("Mode   : AUTO CHAT")
-    print("Status : ONLINE")
+    print(f"Bot       : {client.user}")
+    print(f"Bot ID    : {client.user.id}")
+    print(f"Model     : {MODEL_NAME}")
+    print("Mode      : AUTO CHAT")
+    print("Memory    : PER CHANNEL")
+    print("Image     : ENABLED")
+    print("Status    : ONLINE")
     print("=" * 60)
+    print("")
 
 
 # ============================================================
@@ -184,135 +405,121 @@ async def on_ready():
 @client.event
 async def on_message(message):
 
-    # Jangan merespons bot lain / bot sendiri
+    # --------------------------------------------------------
+    # JANGAN BALAS BOT
+    # --------------------------------------------------------
+
     if message.author.bot:
         return
 
-    # ========================================================
-    # SEMUA PESAN MANUSIA AKAN DIPROSES
-    # Tidak membutuhkan:
-    # !buat
-    # @mention
-    # reply
-    # ========================================================
+    # --------------------------------------------------------
+    # PESAN HARUS MEMILIKI TEKS ATAU ATTACHMENT
+    # --------------------------------------------------------
 
-    async with message.channel.typing():
+    if not message.content.strip() and not message.attachments:
+        return
 
-        try:
+    channel_id = message.channel.id
 
-            # ------------------------------------------------
-            # AMBIL TEKS
-            # ------------------------------------------------
+    # --------------------------------------------------------
+    # LOCK PER CHANNEL
+    # --------------------------------------------------------
 
-            prompt_text = message.content.strip()
+    lock = get_channel_lock(channel_id)
 
-            # ------------------------------------------------
-            # CONTENT GEMINI
-            # ------------------------------------------------
+    async with lock:
 
-            contents = []
+        async with message.channel.typing():
 
-            if prompt_text:
-                contents.append(prompt_text)
+            try:
 
-            # ------------------------------------------------
-            # PROSES GAMBAR
-            # ------------------------------------------------
+                # ------------------------------------------------
+                # SIAPKAN CONTENT
+                # ------------------------------------------------
 
-            image_count = 0
-
-            for attachment in message.attachments:
-
-                content_type = attachment.content_type or ""
-
-                if content_type.startswith("image/"):
-
-                    # Maksimal 5 gambar per pesan
-                    if image_count >= 5:
-                        break
-
-                    image_bytes = await attachment.read()
-
-                    image_part = types.Part.from_bytes(
-                        data=image_bytes,
-                        mime_type=content_type
-                    )
-
-                    contents.append(image_part)
-
-                    image_count += 1
-
-            # ------------------------------------------------
-            # JIKA PESAN BENAR-BENAR KOSONG
-            # ------------------------------------------------
-
-            if not contents:
-                return
-
-            # ------------------------------------------------
-            # KIRIM KE GEMINI
-            # ------------------------------------------------
-
-            response = await asyncio.to_thread(
-                gemini_client.models.generate_content,
-                model=MODEL_NAME,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT
-                )
-            )
-
-            # ------------------------------------------------
-            # AMBIL HASIL
-            # ------------------------------------------------
-
-            response_text = getattr(
-                response,
-                "text",
-                None
-            )
-
-            if not response_text:
-
-                response_text = (
-                    "Maaf, saya belum bisa memberikan "
-                    "jawaban untuk pesan tersebut."
+                contents = await get_message_contents(
+                    message
                 )
 
-            # ------------------------------------------------
-            # KIRIM KE DISCORD
-            # ------------------------------------------------
+                if not contents:
+                    return
 
-            chunks = split_message(response_text)
+                # ------------------------------------------------
+                # AMBIL CHAT SESSION
+                # ------------------------------------------------
 
-            for index, chunk in enumerate(chunks):
+                chat = get_chat_session(
+                    channel_id
+                )
 
-                if index == 0:
+                # ------------------------------------------------
+                # KIRIM KE GEMINI CHAT API
+                # ------------------------------------------------
 
-                    await message.reply(
-                        chunk,
-                        mention_author=False
+                response = await asyncio.to_thread(
+                    chat.send_message,
+                    contents
+                )
+
+                # ------------------------------------------------
+                # AMBIL TEXT RESPONSE
+                # ------------------------------------------------
+
+                response_text = getattr(
+                    response,
+                    "text",
+                    None
+                )
+
+                if not response_text:
+
+                    response_text = (
+                        "Maaf, saya belum mendapatkan "
+                        "respons dari Gemini."
                     )
 
-                else:
+                # ------------------------------------------------
+                # KIRIM KE DISCORD
+                # ------------------------------------------------
 
-                    await message.channel.send(
-                        chunk
-                    )
+                chunks = split_message(
+                    response_text
+                )
 
-        except Exception as error:
+                for index, chunk in enumerate(chunks):
 
-            # Error lengkap hanya muncul di Render Logs
-            print("=" * 60)
-            print("ERROR")
-            print(repr(error))
-            print("=" * 60)
+                    if index == 0:
 
-            await message.reply(
-                "⚠️ Maaf, terjadi kendala teknis. "
-                "Coba kirim pesan sekali lagi.",
-                mention_author=False
-            )
+                        await message.reply(
+                            chunk,
+                            mention_author=False
+                        )
+
+                    else:
+
+                        await message.channel.send(
+                            chunk
+                        )
+
+            except Exception as error:
+
+                # ------------------------------------------------
+                # LOG ERROR KE RENDER
+                # ------------------------------------------------
+
+                print("")
+                print("=" * 60)
+                print("GEMINI / DISCORD ERROR")
+                print("=" * 60)
+                print(repr(error))
+                print("=" * 60)
+                print("")
+
+                await message.reply(
+                    "⚠️ Terjadi kendala teknis saat "
+                    "memproses pesan. Silakan coba lagi.",
+                    mention_author=False
+                )
 
 
 # ============================================================
